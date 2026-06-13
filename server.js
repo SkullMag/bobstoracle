@@ -20,6 +20,17 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
+// Load .env for local development (production sets env vars via systemd)
+try {
+  fs.readFileSync(path.join(__dirname, ".env"), "utf8").split(/\r?\n/).forEach(function (line) {
+    const m = /^([A-Z0-9_]+)\s*=\s*(.+)$/.exec(line.trim());
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+  });
+} catch (e) { /* no .env file — use process environment */ }
+
+const POSTHOG_TOKEN = process.env.POSTHOG_PROJECT_TOKEN || "";
+const POSTHOG_HOST = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
+
 const PORT = 4757;
 const HOST = "search.library.nyu.edu";
 const INST = "01NYU_INST";
@@ -27,97 +38,122 @@ const VID = "01NYU_INST:NYU";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
            "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-// LC classes shelved in Bobst's open stacks, with a rough top-of-range number and
-// the subject you'll find there. We weight random picks by the range size, so big
-// collections (literature, law) come up proportionally more — like the real stacks.
-const SHELVES = [
-  // ---- Floor 4: philosophy, religion, ancient & European history (A–DS) ----
-  { c: "B",  hi: 5800, s: "Philosophy" },
-  { c: "BF", hi: 1990, s: "Psychology" },
-  { c: "BJ", hi: 1700, s: "Ethics" },
-  { c: "BL", hi: 2780, s: "Religion & Mythology" },
-  { c: "BR", hi: 1725, s: "Christianity" },
-  { c: "BS", hi: 2970, s: "The Bible" },
-  { c: "CT", hi: 3000, s: "Biography" },
-  { c: "D",  hi: 2027, s: "World History" },
-  { c: "DA", hi: 995,  s: "History of Britain" },
-  { c: "DC", hi: 801,  s: "History of France" },
-  { c: "DD", hi: 901,  s: "History of Germany" },
-  { c: "DF", hi: 951,  s: "History of Greece" },
-  { c: "DG", hi: 999,  s: "History of Italy" },
-  { c: "DK", hi: 949,  s: "History of Russia & Eastern Europe" },
-  { c: "DS", hi: 937,  s: "History of Asia" },
-  // ---- Floor 6: the Americas, Africa, geography, anthropology (DT–HA) ----
-  { c: "DT", hi: 971,  s: "History of Africa" },
-  { c: "E",  hi: 909,  s: "History of the United States" },
-  { c: "F",  hi: 3799, s: "U.S. Local & Latin American History" },
-  { c: "G",  hi: 9000, s: "Geography & Atlases" },
-  { c: "GN", hi: 890,  s: "Anthropology" },
-  { c: "GT", hi: 7070, s: "Manners & Customs" },
-  { c: "GV", hi: 1860, s: "Recreation & Sport" },
-  { c: "HA", hi: 4737, s: "Statistics" },
-  // ---- Floor 7: music (M) ----
-  { c: "M",  hi: 5000, s: "Music Scores" },
-  { c: "ML", hi: 3930, s: "Writings on Music" },
-  { c: "MT", hi: 960,  s: "Music Instruction" },
-  // ---- Floor 8: literature & economics (P, HB–HJ) ----
-  { c: "PA", hi: 6971, s: "Greek & Latin Literature" },
-  { c: "PC", hi: 5498, s: "Romance Languages" },
-  { c: "PG", hi: 7900, s: "Slavic & East European Literature" },
-  { c: "PL", hi: 8844, s: "Literatures of Asia & Africa" },
-  { c: "PN", hi: 6790, s: "Drama, Film & Journalism" },
-  { c: "PQ", hi: 9999, s: "French, Italian & Spanish Literature" },
-  { c: "PR", hi: 9680, s: "English Literature" },
-  { c: "PS", hi: 3626, s: "American Literature" },
-  { c: "PT", hi: 4899, s: "German & Scandinavian Literature" },
-  { c: "HB", hi: 846,  s: "Economic Theory" },
-  { c: "HC", hi: 1085, s: "Economic History" },
-  { c: "HD", hi: 9000, s: "Industry, Labor & Land" },
-  { c: "HF", hi: 6182, s: "Commerce & Business" },
-  { c: "HG", hi: 9000, s: "Finance & Money" },
-  // ---- Floor 9: art, science, law, sociology (HM–Z) ----
-  { c: "HM", hi: 1281, s: "Sociology" },
-  { c: "HN", hi: 990,  s: "Social History" },
-  { c: "HQ", hi: 2044, s: "Family, Gender & Sexuality" },
-  { c: "HT", hi: 1595, s: "Communities & Social Classes" },
-  { c: "HV", hi: 9000, s: "Social Welfare & Criminology" },
-  { c: "HX", hi: 970,  s: "Socialism & Utopias" },
-  { c: "JC", hi: 628,  s: "Political Theory" },
-  { c: "JK", hi: 9000, s: "U.S. Government & Politics" },
-  { c: "JZ", hi: 6530, s: "International Relations" },
-  { c: "K",  hi: 7000, s: "Law" },
-  { c: "KF", hi: 9000, s: "U.S. Law" },
-  { c: "LB", hi: 3640, s: "Education" },
-  { c: "N",  hi: 9211, s: "Visual Arts" },
-  { c: "NA", hi: 9428, s: "Architecture" },
-  { c: "NC", hi: 1940, s: "Drawing & Design" },
-  { c: "ND", hi: 3416, s: "Painting" },
-  { c: "NK", hi: 8500, s: "Decorative Arts" },
-  { c: "QA", hi: 939,  s: "Mathematics & Computing" },
-  { c: "QB", hi: 991,  s: "Astronomy" },
-  { c: "QC", hi: 999,  s: "Physics" },
-  { c: "QD", hi: 999,  s: "Chemistry" },
-  { c: "QE", hi: 996,  s: "Geology" },
-  { c: "QH", hi: 671,  s: "Biology & Natural History" },
-  { c: "QK", hi: 989,  s: "Botany" },
-  { c: "QL", hi: 991,  s: "Zoology" },
-  { c: "QP", hi: 981,  s: "Physiology" },
-  { c: "R",  hi: 920,  s: "Medicine" },
-  { c: "S",  hi: 972,  s: "Agriculture" },
-  { c: "T",  hi: 995,  s: "Technology & Engineering" },
-  { c: "TK", hi: 9000, s: "Electrical Engineering" },
-  { c: "TR", hi: 1050, s: "Photography" },
-  { c: "TX", hi: 1110, s: "Food & Home Economics" },
-  { c: "U",  hi: 900,  s: "Military Science" },
-  { c: "Z",  hi: 8999, s: "Books, Writing & Libraries" }
+// Official Bobst call-number buckets from NYU Libraries:
+// https://library.nyu.edu/services/borrowing/nyu/finding-materials-bobst-call-numbers-maps/
+//
+// The official table gives broad floor buckets, not exact numeric shelf spans.
+// We pick one of those official buckets first, then pick a representative LC
+// class/number inside that bucket and verify live Bobst holdings in BobCat.
+const OFFICIAL_BUCKETS = [
+  { id: "floor4-main", floor: "4", label: "A, B, C, D-DS", subject: "General Works, Philosophy, Religion & History", shelfIndexes: [] },
+  { id: "floor6-main", floor: "6", label: "DT-DZ, E, F, G, H-HA", subject: "Africa, the Americas, Geography & Social Sciences", shelfIndexes: [] },
+  { id: "floor7-main", floor: "7", label: "M", subject: "Music", shelfIndexes: [] },
+  { id: "floor8-main", floor: "8", label: "P, HB-HJ", subject: "Literature & Economics", shelfIndexes: [] },
+  { id: "floor9-main", floor: "9", label: "HM-HZ, J, K, L, N, Q, R, S, T, U, V, Z", subject: "Sociology, Law, Arts, Sciences & Technology", shelfIndexes: [] }
 ];
 
-// cumulative weights (∝ range size) for a weighted random class pick
-const TOTAL_W = SHELVES.reduce(function (a, s) { return a + s.hi; }, 0);
+// Representative LC classes within the official buckets, with rough top-of-range
+// numbers used only to generate searchable call-number seeds.
+const SHELVES = [
+  { c: "A",  hi: 999,  s: "General Works", g: "floor4-main" },
+  { c: "B",  hi: 5800, s: "Philosophy", g: "floor4-main" },
+  { c: "BF", hi: 1990, s: "Psychology", g: "floor4-main" },
+  { c: "BJ", hi: 1700, s: "Ethics", g: "floor4-main" },
+  { c: "BL", hi: 2780, s: "Religion & Mythology", g: "floor4-main" },
+  { c: "BR", hi: 1725, s: "Christianity", g: "floor4-main" },
+  { c: "BS", hi: 2970, s: "The Bible", g: "floor4-main" },
+  { c: "C",  hi: 999,  s: "Auxiliary Sciences of History", g: "floor4-main" },
+  { c: "CT", hi: 3000, s: "Biography", g: "floor4-main" },
+  { c: "D",  hi: 2027, s: "World History", g: "floor4-main" },
+  { c: "DA", hi: 995,  s: "History of Britain", g: "floor4-main" },
+  { c: "DC", hi: 801,  s: "History of France", g: "floor4-main" },
+  { c: "DD", hi: 901,  s: "History of Germany", g: "floor4-main" },
+  { c: "DF", hi: 951,  s: "History of Greece", g: "floor4-main" },
+  { c: "DG", hi: 999,  s: "History of Italy", g: "floor4-main" },
+  { c: "DK", hi: 949,  s: "History of Russia & Eastern Europe", g: "floor4-main" },
+  { c: "DS", hi: 937,  s: "History of Asia", g: "floor4-main" },
+  { c: "DT", hi: 971,  s: "History of Africa", g: "floor6-main" },
+  { c: "E",  hi: 909,  s: "History of the United States", g: "floor6-main" },
+  { c: "F",  hi: 3799, s: "U.S. Local & Latin American History", g: "floor6-main" },
+  { c: "G",  hi: 9000, s: "Geography & Atlases", g: "floor6-main" },
+  { c: "GN", hi: 890,  s: "Anthropology", g: "floor6-main" },
+  { c: "GT", hi: 7070, s: "Manners & Customs", g: "floor6-main" },
+  { c: "GV", hi: 1860, s: "Recreation & Sport", g: "floor6-main" },
+  { c: "HA", hi: 4737, s: "Statistics", g: "floor6-main" },
+  { c: "M",  hi: 5000, s: "Music Scores", g: "floor7-main" },
+  { c: "ML", hi: 3930, s: "Writings on Music", g: "floor7-main" },
+  { c: "MT", hi: 960,  s: "Music Instruction", g: "floor7-main" },
+  { c: "PA", hi: 6971, s: "Greek & Latin Literature", g: "floor8-main" },
+  { c: "PC", hi: 5498, s: "Romance Languages", g: "floor8-main" },
+  { c: "PG", hi: 7900, s: "Slavic & East European Literature", g: "floor8-main" },
+  { c: "PL", hi: 8844, s: "Literatures of Asia & Africa", g: "floor8-main" },
+  { c: "PN", hi: 6790, s: "Drama, Film & Journalism", g: "floor8-main" },
+  { c: "PQ", hi: 9999, s: "French, Italian & Spanish Literature", g: "floor8-main" },
+  { c: "PR", hi: 9680, s: "English Literature", g: "floor8-main" },
+  { c: "PS", hi: 3626, s: "American Literature", g: "floor8-main" },
+  { c: "PT", hi: 4899, s: "German & Scandinavian Literature", g: "floor8-main" },
+  { c: "HB", hi: 846,  s: "Economic Theory", g: "floor8-main" },
+  { c: "HC", hi: 1085, s: "Economic History", g: "floor8-main" },
+  { c: "HD", hi: 9000, s: "Industry, Labor & Land", g: "floor8-main" },
+  { c: "HF", hi: 6182, s: "Commerce & Business", g: "floor8-main" },
+  { c: "HG", hi: 9000, s: "Finance & Money", g: "floor8-main" },
+  { c: "HM", hi: 1281, s: "Sociology", g: "floor9-main" },
+  { c: "HN", hi: 990,  s: "Social History", g: "floor9-main" },
+  { c: "HQ", hi: 2044, s: "Family, Gender & Sexuality", g: "floor9-main" },
+  { c: "HT", hi: 1595, s: "Communities & Social Classes", g: "floor9-main" },
+  { c: "HV", hi: 9000, s: "Social Welfare & Criminology", g: "floor9-main" },
+  { c: "HX", hi: 970,  s: "Socialism & Utopias", g: "floor9-main" },
+  { c: "JC", hi: 628,  s: "Political Theory", g: "floor9-main" },
+  { c: "JK", hi: 9000, s: "U.S. Government & Politics", g: "floor9-main" },
+  { c: "JZ", hi: 6530, s: "International Relations", g: "floor9-main" },
+  { c: "K",  hi: 7000, s: "Law", g: "floor9-main" },
+  { c: "KF", hi: 9000, s: "U.S. Law", g: "floor9-main" },
+  { c: "LB", hi: 3640, s: "Education", g: "floor9-main" },
+  { c: "N",  hi: 9211, s: "Visual Arts", g: "floor9-main" },
+  { c: "NA", hi: 9428, s: "Architecture", g: "floor9-main" },
+  { c: "NC", hi: 1940, s: "Drawing & Design", g: "floor9-main" },
+  { c: "ND", hi: 3416, s: "Painting", g: "floor9-main" },
+  { c: "NK", hi: 8500, s: "Decorative Arts", g: "floor9-main" },
+  { c: "QA", hi: 939,  s: "Mathematics & Computing", g: "floor9-main" },
+  { c: "QB", hi: 991,  s: "Astronomy", g: "floor9-main" },
+  { c: "QC", hi: 999,  s: "Physics", g: "floor9-main" },
+  { c: "QD", hi: 999,  s: "Chemistry", g: "floor9-main" },
+  { c: "QE", hi: 996,  s: "Geology", g: "floor9-main" },
+  { c: "QH", hi: 671,  s: "Biology & Natural History", g: "floor9-main" },
+  { c: "QK", hi: 989,  s: "Botany", g: "floor9-main" },
+  { c: "QL", hi: 991,  s: "Zoology", g: "floor9-main" },
+  { c: "QP", hi: 981,  s: "Physiology", g: "floor9-main" },
+  { c: "R",  hi: 920,  s: "Medicine", g: "floor9-main" },
+  { c: "S",  hi: 972,  s: "Agriculture", g: "floor9-main" },
+  { c: "T",  hi: 995,  s: "Technology & Engineering", g: "floor9-main" },
+  { c: "TK", hi: 9000, s: "Electrical Engineering", g: "floor9-main" },
+  { c: "TR", hi: 1050, s: "Photography", g: "floor9-main" },
+  { c: "TX", hi: 1110, s: "Food & Home Economics", g: "floor9-main" },
+  { c: "U",  hi: 900,  s: "Military Science", g: "floor9-main" },
+  { c: "Z",  hi: 8999, s: "Books, Writing & Libraries", g: "floor9-main" }
+];
+
+const BUCKET_BY_ID = Object.create(null);
+for (const b of OFFICIAL_BUCKETS) BUCKET_BY_ID[b.id] = b;
+for (let i = 0; i < SHELVES.length; i++) BUCKET_BY_ID[SHELVES[i].g].shelfIndexes.push(i);
+
+// cumulative weights (∝ generated LC seed space) inside the official buckets
+for (const b of OFFICIAL_BUCKETS) {
+  b.weight = b.shelfIndexes.reduce(function (sum, i) { return sum + SHELVES[i].hi; }, 0);
+}
+const TOTAL_W = OFFICIAL_BUCKETS.reduce(function (a, b) { return a + b.weight; }, 0);
 function pickShelfClass() {
   let r = Math.random() * TOTAL_W;
-  for (const s of SHELVES) { if ((r -= s.hi) <= 0) return s; }
-  return SHELVES[SHELVES.length - 1];
+  for (const b of OFFICIAL_BUCKETS) {
+    if ((r -= b.weight) <= 0) {
+      let inner = Math.random() * b.weight;
+      for (const i of b.shelfIndexes) {
+        const s = SHELVES[i];
+        if ((inner -= s.hi) <= 0) return s;
+      }
+    }
+  }
+  return SHELVES[OFFICIAL_BUCKETS[OFFICIAL_BUCKETS.length - 1].shelfIndexes[0]];
 }
 
 // Offline fallback shelves (used only if BobCat can't be reached).
@@ -128,8 +164,8 @@ const FALLBACK = [
   { floor: "6", cls: "E",  num: 184,  section: "E 184",   subject: "History of the United States", span: null }
 ];
 
-// Map an LC call number's leading letters to a Bobst floor (NYU's official directory).
-// A–DS → 4 | DT–HA → 6 | M → 7 | P & HB–HJ → 8 | HM–HZ, J–N, Q–Z → 9
+// Map an LC call number's leading letters to a Bobst floor per NYU's official table.
+// A/B/C/D-DS → 4 | DT-DZ/E/F/G/H-HA → 6 | M → 7 | P/HB-HJ → 8 | HM-HZ/J/K/L/N/Q/R/S/T/U/V/Z → 9
 function floorFor(call) {
   const m = /^([A-Z]+)/.exec(String(call).trim());
   if (!m) return null;
@@ -217,12 +253,15 @@ async function getShelf() {
     if (calls.length < 2) continue;          // empty/sparse spot → re-roll
 
     calls.sort();
+    const bucket = BUCKET_BY_ID[sh.g];
     return {
-      floor: floorFor(seed),
+      floor: bucket.floor,
       cls: sh.c,
       num: num,
       section: sh.c + " " + num,             // the shelf label, e.g. "PR 6053"
       subject: sh.s,
+      officialRange: bucket.label,
+      officialSubject: bucket.subject,
       span: [calls[0], calls[calls.length - 1]],
       nearby: calls.length
     };
@@ -269,11 +308,14 @@ const server = http.createServer(async function (req, res) {
     return;
   }
 
-  // static: serve index.html
+  // static: serve index.html with PostHog config injected
   fs.readFile(path.join(__dirname, "index.html"), function (err, data) {
     if (err) { res.writeHead(404); return res.end("Not found"); }
+    const html = data.toString()
+      .replace(/__POSTHOG_TOKEN__/g, POSTHOG_TOKEN)
+      .replace(/__POSTHOG_HOST__/g, POSTHOG_HOST);
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(data);
+    res.end(html);
   });
 });
 
