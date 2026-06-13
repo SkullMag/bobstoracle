@@ -10,7 +10,7 @@
 <link rel="canonical" href="https://bobstoracle.org/" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
-<meta name="theme-color" content="#7c1c12" />
+<meta name="theme-color" content="#57068c" />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://bobstoracle.org/" />
 <meta property="og:title" content="The Bobst Oracle | Random Shelf Finder for Elmer Holmes Bobst Library" />
@@ -24,11 +24,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Spectral:ital,wght@0,300;0,400;0,500;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --ox: #7c1c12;        /* bobst oxblood */
-    --ox-deep: #4a0f08;
-    --ink: #1a1410;
-    --paper: #f4ece0;     /* warm paper */
-    --paper-2: #ebe0cd;
+    --ox: #57068c;        /* NYU Violet */
+    --ox-deep: #330662;   /* Deep Violet */
+    --ink: #404040;       /* NYU dark gray */
+    --paper: #eee6f3;     /* Light Violet */
+    --paper-2: #dad2df;
     --gold: #c89b3c;
     --line: rgba(26, 20, 16, 0.18);
   }
@@ -46,7 +46,7 @@
     position: relative;
   }
 
-  /* ---- paper grain + vignette ---- */
+  /* ---- light-violet grain + vignette ---- */
   body::before {
     content: "";
     position: fixed;
@@ -54,7 +54,7 @@
     pointer-events: none;
     z-index: 2;
     background:
-      radial-gradient(120% 120% at 50% 0%, transparent 55%, rgba(74, 15, 8, 0.10) 100%);
+      radial-gradient(120% 120% at 50% 0%, transparent 55%, rgba(51, 6, 98, 0.10) 100%);
     mix-blend-mode: multiply;
     animation: vignette-breathe 9s ease-in-out infinite alternate;
   }
@@ -494,7 +494,7 @@
   footer a {
     color: var(--ox);
     text-decoration: none;
-    border-bottom: 1px solid rgba(124, 28, 18, 0.5);
+    border-bottom: 1px solid rgba(87, 6, 140, 0.5);
   }
   footer a:hover { border-bottom-color: var(--ox); }
 
@@ -719,7 +719,7 @@
 <body>
   <!-- faint atrium floor motif: concentric geometric rings echoing Bobst's lobby -->
   <div class="atrium" aria-hidden="true">
-    <svg viewBox="0 0 200 200" fill="none" stroke="#7c1c12" stroke-width="0.6">
+    <svg viewBox="0 0 200 200" fill="none" stroke="#57068c" stroke-width="0.6">
       <rect x="2" y="2" width="196" height="196" />
       <rect x="22" y="22" width="156" height="156" transform="rotate(45 100 100)" />
       <rect x="40" y="40" width="120" height="120" />
