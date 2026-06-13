@@ -491,6 +491,12 @@
     line-height: 1.8;
   }
   footer span { color: var(--ox); }
+  footer a {
+    color: var(--ox);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(124, 28, 18, 0.5);
+  }
+  footer a:hover { border-bottom-color: var(--ox); }
 
   .modal {
     position: fixed;
@@ -546,6 +552,20 @@
   }
 
   @media (max-width: 640px) {
+    body::before { animation-duration: 6s; }
+    body::after {
+      opacity: 0.62;
+      animation-duration: 1.2s;
+    }
+    .atrium {
+      opacity: 0.11;
+      animation-duration: 28s;
+    }
+    .atrium svg {
+      width: min(130vh, 220vw);
+      animation-duration: 9s;
+    }
+
     main {
       max-width: 100%;
       padding: 14px 18px 28px;
@@ -737,8 +757,7 @@
 
     <footer>
       A random shelf finder for <span>Elmer Holmes Bobst Library</span> at NYU<br />
-      Floors per NYU's official call-number directory (stacks on 4, 6, 7, 8 &amp; 9)<br />
-      Shelves checked live against <span>BobCat</span>, NYU's catalog &middot; occupied Bobst stacks only &middot; <span>Good luck up there.</span>
+      Live shelf checks from <span>BobCat</span> &middot; <a href="https://github.com/SkullMag/bobstoracle" target="_blank" rel="noopener">GitHub</a>
     </footer>
   </main>
 
