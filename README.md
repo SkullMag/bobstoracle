@@ -27,13 +27,9 @@ http://localhost:4757
 
 ## systemd
 
-The included unit assumes the site is deployed to `/var/www/bobst-oracle` and runs as a dedicated `bobst` user.
+The included unit assumes the site is deployed to `/home/oleg/bobst` and runs as the `oleg` user.
 
 ```bash
-sudo useradd --system --home /var/www/bobst-oracle --shell /usr/sbin/nologin bobst
-sudo mkdir -p /var/www/bobst-oracle
-sudo cp -R . /var/www/bobst-oracle/
-sudo chown -R bobst:bobst /var/www/bobst-oracle
 sudo cp bobst-oracle.service /etc/systemd/system/bobst-oracle.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now bobst-oracle

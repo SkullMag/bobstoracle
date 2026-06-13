@@ -5,15 +5,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/var/www/bobst-oracle
-ExecStart=/usr/bin/node /var/www/bobst-oracle/server.js
+WorkingDirectory=/home/oleg/bobst
+ExecStart=/usr/bin/node /home/oleg/bobst/server.js
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
 
-# Run as a dedicated unprivileged user in production.
-User=bobst
-Group=bobst
+User=oleg
+Group=oleg
 
 NoNewPrivileges=true
 PrivateTmp=true
