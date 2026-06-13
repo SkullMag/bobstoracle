@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Bobst Oracle | Random Shelf Finder for Elmer Holmes Bobst Library</title>
+<meta name="description" content="The Bobst Oracle is a playful random shelf finder for NYU's Elmer Holmes Bobst Library, sending visitors to a real occupied Bobst Library floor and call-number section using live BobCat catalog checks." />
+<meta name="keywords" content="Bobst, Bobst Library, Elmer Holmes Bobst Library, NYU Bobst, NYU Library, BobCat, random shelf finder" />
+<meta name="robots" content="index,follow" />
+<link rel="canonical" href="https://bobstoracle.org/" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
+<meta name="theme-color" content="#7c1c12" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://bobstoracle.org/" />
+<meta property="og:title" content="The Bobst Oracle | Random Shelf Finder for Elmer Holmes Bobst Library" />
+<meta property="og:description" content="Consult the oracle for a random real shelf to visit in NYU's Elmer Holmes Bobst Library." />
+<meta property="og:site_name" content="The Bobst Oracle" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="The Bobst Oracle | Random Shelf Finder for Elmer Holmes Bobst Library" />
+<meta name="twitter:description" content="A random occupied Bobst Library shelf, live from NYU's catalog." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Spectral:ital,wght@0,300;0,400;0,500;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ox: #7c1c12;        /* bobst oxblood */
+    --ox-deep: #4a0f08;
+    --ink: #1a1410;
+    --paper: #f4ece0;     /* warm paper */
+    --paper-2: #ebe0cd;
+    --gold: #c89b3c;
+    --line: rgba(26, 20, 16, 0.18);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: 'Spectral', Georgia, serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100%;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* ---- paper grain + vignette ---- */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    background:
+      radial-gradient(120% 120% at 50% 0%, transparent 55%, rgba(74, 15, 8, 0.10) 100%);
+    mix-blend-mode: multiply;
+    animation: vignette-breathe 9s ease-in-out infinite alternate;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+    animation: grain-drift 1.8s steps(2) infinite;
+  }
+
+  @keyframes vignette-breathe {
+    from { opacity: 0.85; transform: scale(1); }
+    to { opacity: 1; transform: scale(1.025); }
+  }
+  @keyframes grain-drift {
+    0% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(-1.5%, 1%, 0); }
+    100% { transform: translate3d(1%, -1.5%, 0); }
+  }
+
+  /* ---- the Bobst atrium floor motif, as a faint backdrop ---- */
+  .atrium {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    opacity: 0.06;
+    animation: atrium-turn 42s linear infinite;
+  }
+  .atrium svg {
+    width: min(160vh, 160vw);
+    height: auto;
+    animation: atrium-pulse 14s ease-in-out infinite alternate;
+  }
+
+  @keyframes atrium-turn {
+    from { transform: rotate(0deg) scale(1.02); }
+    to { transform: rotate(360deg) scale(1.02); }
+  }
+  @keyframes atrium-pulse {
+    from { transform: scale(0.96); opacity: 0.75; }
+    to { transform: scale(1.04); opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::before,
+    body::after,
+    .atrium,
+    .atrium svg {
+      animation: none;
+    }
+  }
+
+  main {
+    position: relative;
+    z-index: 3;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: clamp(14px, 3vh, 34px) clamp(20px, 5vw, 48px) clamp(16px, 3vh, 34px);
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- masthead ---- */
+  header {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: clamp(8px, 1.4vh, 12px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .brand {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--ox);
+  }
+  .edition {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink);
+    opacity: 0.6;
+    text-align: right;
+  }
+
+  .hero {
+    margin-top: clamp(14px, 3vh, 28px);
+    text-align: center;
+    transition: margin 0.35s ease;
+  }
+  .kicker {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(10px, 1.4vw, 12px);
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--ox);
+    margin-bottom: clamp(6px, 1.3vh, 12px);
+  }
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-optical-sizing: auto;
+    font-weight: 800;
+    font-size: clamp(48px, min(10vw, 15vh), 112px);
+    line-height: 0.82;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    transition: font-size 0.35s ease;
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ox);
+  }
+  .subtitle {
+    margin: clamp(8px, 1.6vh, 14px) auto 0;
+    max-width: 34ch;
+    font-size: clamp(15px, 1.8vw, 18px);
+    font-style: italic;
+    color: rgba(26, 20, 16, 0.7);
+    line-height: 1.45;
+    transition: opacity 0.25s ease, max-height 0.35s ease, margin 0.35s ease;
+  }
+
+  /* ---- the verdict card ---- */
+  .verdict {
+    margin-top: clamp(14px, 2.5vh, 28px);
+    border: 2px solid var(--ink);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.4), rgba(235, 224, 205, 0.2));
+    box-shadow: 10px 10px 0 var(--ox);
+    position: relative;
+    overflow: hidden;
+    min-height: clamp(220px, 32vh, 290px);
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: min-height 0.35s ease, margin 0.35s ease;
+    flex-shrink: 0;
+  }
+
+  body.is-consulting .hero,
+  body.has-result .hero { margin-top: clamp(8px, 1.6vh, 16px); }
+  body.is-consulting .kicker,
+  body.has-result .kicker {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+    overflow: hidden;
+  }
+  body.is-consulting h1,
+  body.has-result h1 { font-size: clamp(34px, min(6vw, 8vh), 68px); }
+  body.is-consulting h1 br,
+  body.has-result h1 br { display: none; }
+  body.is-consulting h1 em::after,
+  body.has-result h1 em::after { content: " "; }
+  body.is-consulting .subtitle,
+  body.has-result .subtitle {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+    overflow: hidden;
+  }
+  body.has-result .verdict {
+    margin-top: clamp(14px, 2.5vh, 28px);
+    min-height: clamp(390px, 56vh, 540px);
+  }
+
+  /* idle state */
+  .idle {
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: clamp(28px, 5vh, 44px) 28px;
+    gap: 8px;
+  }
+  .idle .glyph {
+    font-family: 'Fraunces', serif;
+    font-size: 76px;
+    line-height: 1;
+    color: var(--ox);
+    opacity: 0.85;
+  }
+  .idle p {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(26,20,16,0.55);
+  }
+
+  /* result state */
+  .result {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: inherit;
+  }
+  .result-top {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    flex: 1;
+  }
+  body.has-result .result {
+    height: auto;
+    min-height: 0;
+  }
+  body.has-result .result-top {
+    flex: 0 0 auto;
+  }
+  @media (max-width: 640px) {
+    .result-top { grid-template-columns: 1fr; }
+  }
+
+  /* floor-map "where to look" strip */
+  .map-strip {
+    border-top: 2px solid var(--ink);
+    background: rgba(255,255,255,0.4);
+    padding: clamp(10px, 1.8vw, 18px);
+    display: flex;
+    gap: clamp(16px, 3vw, 30px);
+    align-items: flex-start;
+  }
+  @media (max-width: 560px) { .map-strip { flex-direction: column; align-items: stretch; } }
+  .map-strip img {
+    width: clamp(96px, 26%, 190px);
+    max-height: none;
+    height: auto;
+    border: 2px solid var(--ink);
+    background: #fff;
+    box-shadow: 5px 5px 0 var(--ox);
+    flex-shrink: 0;
+    cursor: zoom-in;
+  }
+  .map-cap { display: flex; flex-direction: column; gap: 8px; }
+  .map-cap .where {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ox);
+  }
+  .map-cap .dir {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(18px, 2.6vw, 24px);
+    line-height: 1.2;
+    color: var(--ink);
+  }
+  .map-cap .dir b { color: var(--ox); }
+  .map-cap .fine {
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgba(26,20,16,0.62);
+    font-style: italic;
+  }
+
+  .floor-panel {
+    background: var(--ox);
+    color: var(--paper);
+    padding: clamp(14px, 2.4vw, 26px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+  }
+  .floor-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(0,0,0,0.10) 0 2px, transparent 2px 14px);
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+  .floor-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+  .floor-num {
+    font-family: 'Fraunces', serif;
+    font-weight: 900;
+    font-size: clamp(58px, min(10vw, 12vh), 92px);
+    line-height: 0.85;
+    letter-spacing: -0.03em;
+    margin: 6px 0 4px;
+  }
+  .floor-name {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(18px, 2.6vw, 24px);
+    line-height: 1.15;
+  }
+  .floor-desc {
+    margin-top: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgba(244, 236, 224, 0.85);
+    max-width: 30ch;
+  }
+
+  .book-panel {
+    padding: clamp(14px, 2.4vw, 26px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+  .book-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--ox);
+  }
+  .call-number {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: clamp(18px, 3vw, 26px);
+    color: var(--ink);
+    border: 1.5px dashed var(--line);
+    padding: 8px 12px;
+    align-self: flex-start;
+    background: rgba(255,255,255,0.35);
+  }
+  .book-subject {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: clamp(24px, 3.4vw, 34px);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+  }
+  .book-author {
+    font-family: 'Spectral', serif;
+    font-style: italic;
+    font-size: clamp(15px, 2vw, 18px);
+    color: var(--ox);
+    margin-top: -6px;
+  }
+  .book-author .year { font-style: normal; color: rgba(26,20,16,0.5); }
+  .book-instruction {
+    font-size: 15px;
+    line-height: 1.55;
+    color: rgba(26, 20, 16, 0.78);
+    max-width: 40ch;
+  }
+  .book-instruction b { color: var(--ox); font-weight: 600; }
+  .bobcat {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-decoration: none;
+    align-self: flex-start;
+    border-bottom: 2px solid var(--ox);
+    padding-bottom: 2px;
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+  .bobcat:hover { color: var(--ox); }
+
+  /* shuffle flicker */
+  .flicker { animation: flick 0.5s steps(2) infinite; }
+  @keyframes flick { 0%{opacity:1} 50%{opacity:0.35} 100%{opacity:1} }
+
+  .reveal { animation: rise 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- controls ---- */
+  .controls {
+    margin-top: clamp(12px, 2vh, 22px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  button.spin {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--paper);
+    background: var(--ink);
+    border: 2px solid var(--ink);
+    padding: 14px 34px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.2s ease;
+    box-shadow: 5px 5px 0 var(--ox);
+  }
+  button.spin:hover {
+    background: var(--ox);
+    border-color: var(--ox);
+    box-shadow: 5px 5px 0 var(--ink);
+    transform: translate(-1px, -1px);
+  }
+  button.spin:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ox); }
+  button.spin:disabled { opacity: 0.5; cursor: wait; }
+
+  .hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: rgba(26,20,16,0.45);
+    text-transform: uppercase;
+  }
+  .count { color: var(--ox); }
+
+  footer {
+    margin-top: auto;
+    padding-top: clamp(12px, 2.5vh, 24px);
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(26,20,16,0.4);
+    line-height: 1.8;
+  }
+  footer span { color: var(--ox); }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    place-items: center;
+    padding: clamp(18px, 4vw, 48px);
+    background: rgba(26, 20, 16, 0.72);
+  }
+  .modal.open { display: grid; }
+  .modal img {
+    max-width: min(96vw, 1100px);
+    max-height: 88svh;
+    width: auto;
+    height: auto;
+    border: 2px solid var(--ink);
+    background: #fff;
+    box-shadow: 10px 10px 0 var(--ox);
+  }
+  .modal-close {
+    position: fixed;
+    top: clamp(14px, 3vw, 28px);
+    right: clamp(14px, 3vw, 28px);
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    line-height: 1;
+    color: var(--paper);
+    background: var(--ink);
+    border: 2px solid var(--paper);
+    width: 46px;
+    height: 46px;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 var(--ox);
+  }
+  .modal-close:hover { background: var(--ox); }
+
+  @media (min-width: 760px) and (min-height: 680px) {
+    body:not(.has-result) { overflow: hidden; }
+    main { height: 100svh; }
+    body.has-result main { height: auto; }
+  }
+
+  @media (max-height: 820px) and (min-width: 760px) {
+    .brand, .edition, .kicker, .book-label, .floor-label, .hint, footer { font-size: 10px; }
+    .subtitle { display: none; }
+    .map-strip img { display: none; }
+    button.spin { padding: 12px 30px; }
+    body.is-consulting .subtitle,
+    body.has-result .subtitle { display: block; max-height: 0; }
+    body.has-result .map-strip img { display: block; }
+    body.has-result .verdict { min-height: auto; }
+  }
+
+  @media (max-width: 640px) {
+    main {
+      max-width: 100%;
+      padding: 18px 18px 34px;
+    }
+
+    header {
+      align-items: start;
+      gap: 10px;
+      padding-bottom: 12px;
+    }
+    .brand,
+    .edition {
+      font-size: 10px;
+      line-height: 1.55;
+    }
+    .brand {
+      max-width: 18ch;
+      letter-spacing: 0.24em;
+    }
+    .edition {
+      max-width: 14ch;
+      letter-spacing: 0.18em;
+    }
+
+    .hero { margin-top: 28px; }
+    .kicker {
+      max-width: 28ch;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.45;
+      letter-spacing: 0.34em;
+    }
+    h1 {
+      font-size: clamp(58px, 17vw, 78px);
+      line-height: 0.88;
+    }
+    .subtitle {
+      max-width: 28ch;
+      font-size: 18px;
+      line-height: 1.38;
+    }
+
+    .verdict {
+      margin-top: 30px;
+      min-height: 260px;
+      box-shadow: 8px 8px 0 var(--ox);
+    }
+    .idle {
+      min-height: 260px;
+      padding: 34px 18px;
+    }
+    .idle .glyph { font-size: 58px; }
+    .idle p {
+      font-size: 11px;
+      line-height: 1.5;
+      letter-spacing: 0.18em;
+    }
+
+    .floor-panel {
+      align-items: center;
+      text-align: center;
+      padding: 22px 20px;
+    }
+    .floor-num { font-size: clamp(70px, 22vw, 92px); }
+    .floor-name { max-width: 12ch; }
+    .book-panel { padding: 24px 22px; }
+    .book-label { letter-spacing: 0.24em; }
+    .call-number { font-size: 24px; }
+    .book-subject { font-size: clamp(34px, 10vw, 48px); }
+    .book-author,
+    .book-instruction { font-size: 17px; }
+    .bobcat {
+      line-height: 1.6;
+      letter-spacing: 0.1em;
+    }
+
+    .map-strip {
+      padding: 20px;
+      gap: 18px;
+    }
+    .map-strip img { width: min(100%, 320px); }
+    .map-cap .dir { font-size: 25px; }
+
+    .controls { margin-top: 24px; }
+    button.spin {
+      width: min(100%, 520px);
+      padding: 18px 20px;
+      letter-spacing: 0.18em;
+    }
+    footer {
+      padding-top: 34px;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      line-height: 1.9;
+    }
+
+    body.is-consulting .hero,
+    body.has-result .hero { margin-top: 16px; }
+    body.is-consulting h1,
+    body.has-result h1 {
+      font-size: clamp(30px, 8.6vw, 42px);
+      line-height: 1;
+      white-space: nowrap;
+    }
+    body.has-result .verdict { margin-top: 20px; }
+  }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "The Bobst Oracle",
+  "url": "https://bobstoracle.org/",
+  "description": "A playful random shelf finder for NYU's Elmer Holmes Bobst Library.",
+  "keywords": [
+    "Bobst",
+    "Bobst Library",
+    "Elmer Holmes Bobst Library",
+    "NYU Bobst",
+    "NYU Library",
+    "BobCat",
+    "random shelf finder"
+  ],
+  "about": {
+    "@type": "Library",
+    "name": "Elmer Holmes Bobst Library",
+    "alternateName": "Bobst Library",
+    "parentOrganization": {
+      "@type": "CollegeOrUniversity",
+      "name": "New York University"
+    }
+  }
+}
+</script>
+</head>
+<body>
+  <!-- faint atrium floor motif: concentric geometric rings echoing Bobst's lobby -->
+  <div class="atrium" aria-hidden="true">
+    <svg viewBox="0 0 200 200" fill="none" stroke="#7c1c12" stroke-width="0.6">
+      <rect x="2" y="2" width="196" height="196" />
+      <rect x="22" y="22" width="156" height="156" transform="rotate(45 100 100)" />
+      <rect x="40" y="40" width="120" height="120" />
+      <rect x="54" y="54" width="92" height="92" transform="rotate(45 100 100)" />
+      <rect x="70" y="70" width="60" height="60" />
+      <rect x="80" y="80" width="40" height="40" transform="rotate(45 100 100)" />
+      <line x1="100" y1="2" x2="100" y2="198" />
+      <line x1="2" y1="100" x2="198" y2="100" />
+    </svg>
+  </div>
+
+  <main>
+    <header>
+      <div class="brand">Elmer Holmes Bobst Library &middot; NYU</div>
+      <div class="edition">No. 12 / Washington Sq.</div>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">A Procedurally Divine Reading Assignment</div>
+      <h1>The&nbsp;<em>Bobst</em><br />Oracle</h1>
+      <p class="subtitle">Every spin draws a real occupied shelf at Bobst &mdash; live from NYU&rsquo;s catalog &mdash; then shows you which floor and call-number section to wander to.</p>
+    </section>
+
+    <section class="verdict" id="verdict">
+      <div class="idle" id="idle">
+        <div class="glyph">&#10070;</div>
+        <p>Awaiting your consultation</p>
+      </div>
+    </section>
+
+    <div class="controls">
+      <button class="spin" id="spin">Consult the Oracle</button>
+      <div class="hint">Verdicts issued: <span class="count" id="count">0</span></div>
+    </div>
+
+    <footer>
+      An unofficial random shelf finder for <span>Elmer Holmes Bobst Library</span> at NYU<br />
+      Floors per NYU's official call-number directory (stacks on 4, 6, 7, 8 &amp; 9)<br />
+      Shelves checked live against <span>BobCat</span>, NYU's catalog &middot; occupied Bobst stacks only &middot; <span>Good luck up there.</span>
+    </footer>
+  </main>
+
+  <div class="modal" id="mapModal" aria-hidden="true" role="dialog" aria-label="Enlarged floor map">
+    <button class="modal-close" id="modalClose" type="button" aria-label="Close enlarged map">&times;</button>
+    <img id="modalImage" src="" alt="" />
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Bobst's REAL open-stack floors, per NYU's official call-number/floor directory.
+  // (Floor 3 is closed for renovation; special collections live on LL2 / Mezzanine / 2.)
+  const FLOORS = [
+    { id: "4", name: "Philosophy & World History", desc: "General works, philosophy, religion, and the ancient & European past — call numbers A through DS." },
+    { id: "6", name: "The Americas, Africa & Geography", desc: "American and African history, geography, and anthropology (DT–HA). Children's literature hides on the east side." },
+    { id: "7", name: "Music & the Avery Fisher Center", desc: "The whole of M — scores, recordings, music history — sharing the floor with the media listening rooms." },
+    { id: "8", name: "Literature & Economics", desc: "Every P call number: all the world's literature, wall to wall. Economics (HB–HJ) shares the floor." },
+    { id: "9", name: "Art, Sciences & Reference", desc: "Fine arts, the sciences, law, and sociology (HM–Z), plus the Reference Collection in the northwest corner." }
+  ];
+
+  // Playful tasks, picked at random for whatever shelf turns up.
+  const TASKS = [
+    "Pick the third book from the left that catches your eye.",
+    "Scan the spines until one title feels like a dare.",
+    "Choose a book from the shelf above or below if the exact section is crowded.",
+    "Find the oldest-looking spine in the run and open to a random page.",
+    "Pull one thin book and one enormous book. Let them argue.",
+    "Read the first paragraph of whatever your hand lands on.",
+    "Look for the strangest subtitle in this section.",
+    "Take five minutes with the shelf before deciding what to carry away.",
+    "Pick a book whose call number is closest to the middle of the run.",
+    "Let typography choose: pull the spine with the best title design.",
+    "Find a book you would never have searched for on purpose.",
+    "Read one page nearby, then reshelve it exactly where it belongs."
+  ];
+
+  const SCRAMBLE = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789".split("");
+  const SPIN_SUBJECTS = ["Philosophy","Literature","Music","Sociology","World History",
+    "Visual Arts","Political Theory","Anthropology","Film","Science"];
+
+  // Offline fallback, in case the catalog can't be reached.
+  const FALLBACK = [
+    { floor: "8", cls: "PR", section: "PR 6053", subject: "English Literature", span: null, nearby: null },
+    { floor: "9", cls: "QA", section: "QA 76", subject: "Mathematics & Computing", span: null, nearby: null },
+    { floor: "4", cls: "B", section: "B 105", subject: "Philosophy", span: null, nearby: null },
+    { floor: "6", cls: "E", section: "E 184", subject: "History of the United States", span: null, nearby: null },
+    { floor: "7", cls: "ML", section: "ML 197", subject: "Writings on Music", span: null, nearby: null }
+  ];
+
+  const verdict = document.getElementById("verdict");
+  const spinBtn = document.getElementById("spin");
+  const countEl = document.getElementById("count");
+  const mapModal = document.getElementById("mapModal");
+  const modalImage = document.getElementById("modalImage");
+  const modalClose = document.getElementById("modalClose");
+  let count = 0, spinning = false;
+
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function scramble(n) { let s = ""; for (let i = 0; i < n; i++) s += pick(SCRAMBLE); return s; }
+  function floorById(id) { for (const f of FLOORS) if (f.id === id) return f; return FLOORS[0]; }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function bobcatURL(section) {
+    const q = encodeURIComponent(String(section).replace(/\s+/g, ""));
+    return "https://search.library.nyu.edu/discovery/search?query=any,contains," + q +
+           "&tab=Everything&search_scope=MyInst_and_CI&vid=01NYU_INST:NYU&offset=0";
+  }
+
+  // Ask our local server for one real occupied Bobst shelf section.
+  // (The server proxies NYU's BobCat catalog — the browser can't reach it directly.)
+  async function fetchShelf() {
+    try {
+      const res = await fetch("/api/shelf", { headers: { Accept: "application/json" } });
+      if (res.ok) {
+        const shelf = await res.json();
+        if (shelf && shelf.section) {
+          return {
+            floor: shelf.floor,
+            cls: shelf.cls || lcClass(shelf.section),
+            section: shelf.section,
+            subject: shelf.subject || "Bobst open stacks",
+            span: shelf.span || null,
+            nearby: shelf.nearby || null,
+            url: bobcatURL(shelf.section)
+          };
+        }
+      }
+    } catch (e) { /* fall through to offline fallback */ }
+
+    const f = pick(FALLBACK);
+    return { floor: f.floor, cls: f.cls, section: f.section, subject: f.subject,
+             span: f.span, nearby: f.nearby, url: bobcatURL(f.section) };
+  }
+
+  function floorMapURL(id) {
+    return "https://s3.amazonaws.com/nyulibraries-www-assets/floor-maps/" + id + ".gif";
+  }
+  function lcClass(call) {
+    const m = /^([A-Z]+)/.exec(String(call).trim());
+    return m ? m[1] : "";
+  }
+
+  function render(floor, shelf, isFinal) {
+    document.body.classList.toggle("has-result", isFinal);
+    const span = (isFinal && shelf.span && shelf.span.length === 2)
+      ? "Nearby run: " + shelf.span[0] + " to " + shelf.span[1]
+      : "Use the call-number signs, then browse outward from this section.";
+    const tail = isFinal
+      ? '<div class="book-instruction"><b>Your shelf task:</b> ' + esc(shelf.task) + "</div>" +
+        '<a class="bobcat" href="' + shelf.url + '" target="_blank" rel="noopener">Search this section in BobCat &#8599;</a>'
+      : "";
+
+    const top =
+      '<div class="result-top">' +
+        '<div class="floor-panel">' +
+          '<div class="floor-label">Proceed to floor</div>' +
+          '<div class="floor-num">' + floor.id + "</div>" +
+          '<div class="floor-name">' + esc(floor.name) + "</div>" +
+        "</div>" +
+        '<div class="book-panel">' +
+          '<div class="book-label">Find this shelf</div>' +
+          '<div class="call-number">' + esc(shelf.section) + "</div>" +
+          '<div class="book-subject">' + esc(shelf.subject) + "</div>" +
+          '<div class="book-author">' + esc(span) + "</div>" +
+          tail +
+        "</div>" +
+      "</div>";
+
+    let map = "";
+    if (isFinal) {
+      const cls = shelf.cls || lcClass(shelf.section);
+      map =
+        '<div class="map-strip">' +
+          '<img class="map-thumb" src="' + floorMapURL(floor.id) + '" alt="Map of Bobst floor ' + floor.id + '" loading="lazy" onerror="this.remove()" />' +
+          '<div class="map-cap">' +
+            '<div class="where">Where to look &middot; Floor ' + floor.id + "</div>" +
+            '<div class="dir">The stacks run in call-number order. Find the <b>' + esc(cls) +
+              '</b> shelves, then walk the aisle to <b>' + esc(shelf.section) + "</b>.</div>" +
+            '<div class="fine">' + esc(floor.desc) + "</div>" +
+          "</div>" +
+        "</div>";
+    }
+
+    verdict.innerHTML = '<div class="result ' + (isFinal ? "reveal" : "flicker") + '">' + top + map + "</div>";
+  }
+
+  function openMapModal(img) {
+    modalImage.src = img.src;
+    modalImage.alt = img.alt;
+    mapModal.classList.add("open");
+    mapModal.setAttribute("aria-hidden", "false");
+    modalClose.focus();
+  }
+
+  function closeMapModal() {
+    mapModal.classList.remove("open");
+    mapModal.setAttribute("aria-hidden", "true");
+    modalImage.src = "";
+  }
+
+  async function spin() {
+    if (spinning) return;
+    spinning = true;
+    document.body.classList.add("is-consulting");
+    spinBtn.disabled = true;
+    spinBtn.textContent = "Consulting…";
+
+    const shelfPromise = fetchShelf();          // kick off the real fetch immediately
+
+    let ticks = 0;
+    const minTicks = 13;
+    const interval = setInterval(function () {
+      ticks++;
+      const fake = {
+        section: scramble(2) + " " + String(1 + Math.floor(Math.random() * 8999)),
+        subject: pick(SPIN_SUBJECTS),
+        span: null
+      };
+      render(pick(FLOORS), fake, false);
+    }, 70);
+
+    const shelf = await shelfPromise;
+    while (ticks < minTicks) await delay(40);   // let the shuffle breathe
+    clearInterval(interval);
+
+    shelf.task = pick(TASKS);
+    document.body.classList.remove("is-consulting");
+    render(floorById(shelf.floor), shelf, true);
+    count++;
+    countEl.textContent = count;
+    spinning = false;
+    spinBtn.disabled = false;
+    spinBtn.textContent = count === 1 ? "Consult Again" : "Once More";
+  }
+
+  spinBtn.addEventListener("click", spin);
+  verdict.addEventListener("click", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("map-thumb")) {
+      openMapModal(e.target);
+    }
+  });
+  modalClose.addEventListener("click", closeMapModal);
+  mapModal.addEventListener("click", function (e) {
+    if (e.target === mapModal) closeMapModal();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.code === "Escape" && mapModal.classList.contains("open")) {
+      closeMapModal();
+      return;
+    }
+    if (e.code === "Space" || e.code === "Enter") {
+      e.preventDefault();
+      spin();
+    }
+  });
+})();
+</script>
+</body>
+</html>

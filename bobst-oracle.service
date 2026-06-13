@@ -1,0 +1,24 @@
+[Unit]
+Description=The Bobst Oracle website
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/bobst-oracle
+ExecStart=/usr/bin/node /var/www/bobst-oracle/server.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+# Run as a dedicated unprivileged user in production.
+User=bobst
+Group=bobst
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
