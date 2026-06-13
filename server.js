@@ -1,11 +1,12 @@
 // The Bobst Oracle — local server.
 //
 // It gives you a RANDOM SHELF to wander to. Each spin:
-//   1. picks a random spot in the Library-of-Congress call-number space
-//      (a random class + random number), weighted by how big each class is;
-//   2. asks NYU's catalog (BobCat) whether Bobst actually has books shelved there,
-//      so we only ever send you to a real, occupied aisle — never a gap;
-//   3. returns the floor + the call-number section + what's shelved there.
+//   1. picks a random Library-of-Congress class (each class equally likely);
+//   2. searches NYU's catalog (BobCat) for that class's subject and harvests the
+//      real call numbers of books actually shelved at Bobst Main — so we only
+//      ever send you to a real, occupied aisle, never a gap;
+//   3. returns the floor + the call-number section + what's shelved there,
+//      derived from that real call number.
 //
 // It does NOT pick a book. You go to the shelf and grab whatever calls to you.
 //
@@ -38,6 +39,10 @@ const VID = "01NYU_INST:NYU";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
            "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
+function log() {
+  console.log(new Date().toISOString(), ...arguments);
+}
+
 // Official Bobst call-number buckets from NYU Libraries:
 // https://library.nyu.edu/services/borrowing/nyu/finding-materials-bobst-call-numbers-maps/
 //
@@ -45,11 +50,11 @@ const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 // We pick one of those official buckets first, then pick a representative LC
 // class/number inside that bucket and verify live Bobst holdings in BobCat.
 const OFFICIAL_BUCKETS = [
-  { id: "floor4-main", floor: "4", label: "A, B, C, D-DS", subject: "General Works, Philosophy, Religion & History", shelfIndexes: [] },
-  { id: "floor6-main", floor: "6", label: "DT-DZ, E, F, G, H-HA", subject: "Africa, the Americas, Geography & Social Sciences", shelfIndexes: [] },
-  { id: "floor7-main", floor: "7", label: "M", subject: "Music", shelfIndexes: [] },
-  { id: "floor8-main", floor: "8", label: "P, HB-HJ", subject: "Literature & Economics", shelfIndexes: [] },
-  { id: "floor9-main", floor: "9", label: "HM-HZ, J, K, L, N, Q, R, S, T, U, V, Z", subject: "Sociology, Law, Arts, Sciences & Technology", shelfIndexes: [] }
+  { id: "floor4-main", floor: "4", label: "A, B, C, D-DS", subject: "General Works, Philosophy, Religion & History" },
+  { id: "floor6-main", floor: "6", label: "DT-DZ, E, F, G, H-HA", subject: "Africa, the Americas, Geography & Social Sciences" },
+  { id: "floor7-main", floor: "7", label: "M", subject: "Music" },
+  { id: "floor8-main", floor: "8", label: "P, HB-HJ", subject: "Literature & Economics" },
+  { id: "floor9-main", floor: "9", label: "HM-HZ, J, K, L, N, Q, R, S, T, U, V, Z", subject: "Sociology, Law, Arts, Sciences & Technology" }
 ];
 
 // Representative LC classes within the official buckets, with rough top-of-range
@@ -133,27 +138,16 @@ const SHELVES = [
   { c: "Z",  hi: 8999, s: "Books, Writing & Libraries", g: "floor9-main" }
 ];
 
-const BUCKET_BY_ID = Object.create(null);
-for (const b of OFFICIAL_BUCKETS) BUCKET_BY_ID[b.id] = b;
-for (let i = 0; i < SHELVES.length; i++) BUCKET_BY_ID[SHELVES[i].g].shelfIndexes.push(i);
+// Look up an official floor bucket by floor number, and a class's subject/group
+// by its LC letters — used to label shelves we harvest from real call numbers.
+const BUCKET_BY_FLOOR = Object.create(null);
+for (const b of OFFICIAL_BUCKETS) BUCKET_BY_FLOOR[b.floor] = b;
+const CLASS_INFO = Object.create(null);
+for (const s of SHELVES) CLASS_INFO[s.c] = s;
 
-// cumulative weights (∝ generated LC seed space) inside the official buckets
-for (const b of OFFICIAL_BUCKETS) {
-  b.weight = b.shelfIndexes.reduce(function (sum, i) { return sum + SHELVES[i].hi; }, 0);
-}
-const TOTAL_W = OFFICIAL_BUCKETS.reduce(function (a, b) { return a + b.weight; }, 0);
+// Every LC class is equally likely — each subject gets the same airtime.
 function pickShelfClass() {
-  let r = Math.random() * TOTAL_W;
-  for (const b of OFFICIAL_BUCKETS) {
-    if ((r -= b.weight) <= 0) {
-      let inner = Math.random() * b.weight;
-      for (const i of b.shelfIndexes) {
-        const s = SHELVES[i];
-        if ((inner -= s.hi) <= 0) return s;
-      }
-    }
-  }
-  return SHELVES[OFFICIAL_BUCKETS[OFFICIAL_BUCKETS.length - 1].shelfIndexes[0]];
+  return SHELVES[Math.floor(Math.random() * SHELVES.length)];
 }
 
 // Offline fallback shelves (used only if BobCat can't be reached).
@@ -201,71 +195,108 @@ async function mintToken() {
   return TOKEN;
 }
 
-function searchPath(callSeed) {
+function searchPath(query, offset) {
   const params = new URLSearchParams({
-    inst: INST, lang: "en", limit: "50", offset: "0",
-    q: "any,contains," + callSeed, qInclude: "facet_rtype,exact,books",
+    inst: INST, lang: "en", limit: "50", offset: String(offset || 0),
+    q: "any,contains," + query, qInclude: "facet_rtype,exact,books",
     scope: "MyInst_and_CI", tab: "LibraryCatalog", vid: VID,
     sort: "rank", pcAvailability: "false", mode: "advanced"
   });
   return "/primaws/rest/pub/pnxs?" + params.toString();
 }
 
-async function primoSearch(callSeed) {
+async function primoSearch(query, offset) {
   if (!TOKEN) await mintToken();
-  let r = await httpGet(searchPath(callSeed), TOKEN);
-  if (r.status === 401 || r.status === 403) { await mintToken(); r = await httpGet(searchPath(callSeed), TOKEN); }
+  const t0 = Date.now();
+  let r = await httpGet(searchPath(query, offset), TOKEN);
+  if (r.status === 401 || r.status === 403) { await mintToken(); r = await httpGet(searchPath(query, offset), TOKEN); }
+  log("search", "q=\"" + query + "\"", "offset=" + (offset || 0), "status=" + r.status, "latency=" + (Date.now() - t0) + "ms");
   if (r.status !== 200) throw new Error("HTTP " + r.status);
   return JSON.parse(r.body);
 }
 
-// Real Bobst Main-Collection call numbers that sit in the EXACT seed section
-// (e.g. seed "B526" matches "B526 .S73" but not "BT1319 .B526" or "B5267 ...").
-function bobstCallsAtSeed(data, seed) {
-  const re = new RegExp("^" + seed + "(?![0-9])");   // class+number, not a longer number
-  const out = [];
+// Parse an LC call number into its shelf section, e.g. "PR6053 .M38" -> { cls:"PR", num:6053, section:"PR 6053" }.
+function parseCall(call) {
+  const norm = String(call).replace(/\s+/g, "").toUpperCase();
+  const m = /^([A-Z]+)([0-9]+)/.exec(norm);
+  return m ? { cls: m[1], num: Number(m[2]), section: m[1] + " " + m[2] } : null;
+}
+
+// Harvest every real Bobst Main Collection shelf from a result set, grouped by
+// section. We trust the call numbers BobCat returns rather than the term we
+// searched, so the shelf is always real and occupied regardless of the query.
+function harvestShelves(data) {
+  const bySection = Object.create(null);
+  let bobstMain = 0;
   for (const d of (data.docs || [])) {
     for (const h of (d.delivery && d.delivery.holding) || []) {
       if (h.libraryCode === "BOBST" &&
           /Main Collection/i.test(h.subLocation || "") &&
           h.callNumber) {
-        const norm = String(h.callNumber).replace(/\s+/g, "").toUpperCase();
-        if (re.test(norm)) out.push(String(h.callNumber).trim());
+        bobstMain++;
+        const p = parseCall(h.callNumber);
+        if (!p) continue;
+        if (!bySection[p.section]) bySection[p.section] = { section: p.section, cls: p.cls, num: p.num, calls: [] };
+        bySection[p.section].calls.push(String(h.callNumber).trim());
       }
     }
   }
-  return out;
+  return { shelves: Object.keys(bySection).map(function (k) { return bySection[k]; }), bobstMain: bobstMain };
 }
-
-function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
 // Pick a random, real, occupied Bobst shelf. Returns null only if BobCat is down.
 async function getShelf() {
-  for (let attempt = 0; attempt < 22; attempt++) {
+  for (let attempt = 0; attempt < 12; attempt++) {
     const sh = pickShelfClass();
-    const num = 1 + Math.floor(Math.random() * sh.hi);
-    const seed = sh.c + num;                 // e.g. "PR6053"
+    const offset = 0;  // deep offsets are slow on BobCat; page 1 is plenty given random class + section picks
+    // Seed with the class's subject text: it reliably returns Bobst Main books
+    // and biases results toward this class, unlike a bare class letter which
+    // mostly matches free text and yields call numbers from every class.
+    const seed = sh.s;
+    log("shelf attempt", attempt + 1, "class=" + sh.c, "seed=\"" + seed + "\"", "offset=" + offset);
     let data;
-    try { data = await primoSearch(seed); }
-    catch (e) { await sleep(250); continue; }
+    try { data = await primoSearch(seed, offset); }
+    catch (e) {
+      log("shelf request failed", "seed=\"" + seed + "\"", "offset=" + offset, "error=" + String(e.message || e));
+      continue;
+    }
 
-    const calls = bobstCallsAtSeed(data, seed);
-    if (calls.length < 2) continue;          // empty/sparse spot → re-roll
+    const got = harvestShelves(data);
+    if (!got.shelves.length) {
+      log("shelf reroll", "seed=\"" + seed + "\"", "offset=" + offset,
+        "reason=" + (got.bobstMain === 0 ? "no Bobst Main holdings in results" : "no parseable call numbers"));
+      continue;
+    }
 
-    calls.sort();
-    const bucket = BUCKET_BY_ID[sh.g];
+    // Prefer a shelf in the class we picked (keeps floor/subject on theme);
+    // otherwise take any real shelf the search surfaced.
+    const onClass = got.shelves.filter(function (s) { return s.cls === sh.c; });
+    const pool = onClass.length ? onClass : got.shelves;
+    const hit = pool[Math.floor(Math.random() * pool.length)];
+
+    const floor = floorFor(hit.section);
+    if (!floor) continue;  // unmapped class (rare) — reroll
+    const fbucket = BUCKET_BY_FLOOR[floor];
+    const info = CLASS_INFO[hit.cls];
+    const subject = info ? info.s : fbucket.subject;
+
+    const calls = Array.from(new Set(hit.calls)).sort();
+
+    log("shelf found", "section=" + hit.section, "floor=" + floor, "nearby=" + calls.length,
+      "span=" + calls[0] + " -> " + calls[calls.length - 1], onClass.length ? "" : "(off-class seed)");
     return {
-      floor: bucket.floor,
-      cls: sh.c,
-      num: num,
-      section: sh.c + " " + num,             // the shelf label, e.g. "PR 6053"
-      subject: sh.s,
-      officialRange: bucket.label,
-      officialSubject: bucket.subject,
+      floor: floor,
+      cls: hit.cls,
+      num: hit.num,
+      section: hit.section,
+      subject: subject,
+      officialRange: fbucket.label,
+      officialSubject: fbucket.subject,
       span: [calls[0], calls[calls.length - 1]],
       nearby: calls.length
     };
   }
+  log("shelf fallback", "reason=no occupied section after attempts");
   return null;
 }
 
@@ -273,8 +304,10 @@ const server = http.createServer(async function (req, res) {
   const url = new URL(req.url, "http://localhost");
   if (req.url === "/api/shelf") {
     try {
+      log("api shelf start");
       let shelf = await getShelf();
       if (!shelf) shelf = FALLBACK[Math.floor(Math.random() * FALLBACK.length)];
+      log("api shelf done", "section=" + shelf.section, "floor=" + shelf.floor);
       res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
       return res.end(JSON.stringify(shelf));
     } catch (e) {
